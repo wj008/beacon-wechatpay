@@ -104,7 +104,7 @@ class WeChat
     /**
      * 获取支付前的数据
      * @param string $openId
-     * @param string $payNumber
+     * @param string $tradeNo
      * @param float $amount
      * @param string $body
      * @param string $attach
@@ -113,7 +113,7 @@ class WeChat
      * @return array|null
      * @throws BusException|GuzzleException
      */
-    public static function prepayData(string $openId, string $payNumber, float $amount, string $body, string $attach = '', int $time_expire = 0, string $notifyUrl = '/service/wechat_pay/notify'): ?array
+    public static function prepayData(string $openId, string $tradeNo, float $amount, string $body, string $attach = '', int $time_expire = 0, string $notifyUrl = '/service/wechat_pay/notify'): ?array
     {
         $weChat = Config::get('wechat.*');
         if (empty($body)) {
@@ -123,7 +123,7 @@ class WeChat
         $param['appid'] = $weChat['appid'];
         $param['mchid'] = $weChat['pay_mchid'];
         $param['description'] = $body;
-        $param['out_trade_no'] = $payNumber;
+        $param['out_trade_no'] = $tradeNo;
         if ($time_expire > 0) {
             $param['time_expire'] = date('Y-m-d', $time_expire) . 'T' . date('H:i:s', $time_expire) . '+08:00';
         }
@@ -149,7 +149,7 @@ class WeChat
 
     /**
      * 后台下单方式，不需要OPENID
-     * @param string $payNumber
+     * @param string $tradeNo
      * @param float $amount
      * @param string $body
      * @param string $attach
@@ -159,7 +159,7 @@ class WeChat
      * @throws BusException
      * @throws GuzzleException
      */
-    public static function nativePay(string $payNumber, float $amount, string $body, string $attach = '', int $time_expire = 0, string $notifyUrl = '/service/wechat_pay/notify'): array
+    public static function nativePay(string $tradeNo, float $amount, string $body, string $attach = '', int $time_expire = 0, string $notifyUrl = '/service/wechat_pay/notify'): array
     {
         $weChat = Config::get('wechat.*');
         if (empty($body)) {
@@ -169,7 +169,7 @@ class WeChat
         $param['appid'] = $weChat['appid'];
         $param['mchid'] = $weChat['pay_mchid'];
         $param['description'] = $body;
-        $param['out_trade_no'] = $payNumber;
+        $param['out_trade_no'] = $tradeNo;
         if ($time_expire > 0) {
             $param['time_expire'] = date('Y-m-d', $time_expire) . 'T' . date('H:i:s', $time_expire) . '+08:00';
         }
@@ -191,9 +191,9 @@ class WeChat
 
     /**
      * 提交退款
-     * @param string $transactionId
-     * @param string $payNumber
-     * @param string $refundNumber
+     * @param string $transactionNumber
+     * @param string $tradeNo
+     * @param string $refundNo
      * @param float $total
      * @param float $refund
      * @param string $reason
@@ -202,13 +202,13 @@ class WeChat
      * @throws BusException
      * @throws GuzzleException
      */
-    public static function applyRefund(string $transactionId, string $payNumber, string $refundNumber, float $total, float $refund, string $reason = '', string $notifyUrl = '/service/wechat_pay/refund'): array
+    public static function applyRefund(string $transactionNumber, string $tradeNo, string $refundNo, float $total, float $refund, string $reason = '', string $notifyUrl = '/service/wechat_pay/refund'): array
     {
         $weChat = Config::get('wechat.*');
         $param = [];
-        $param['transaction_id'] = $transactionId;
-        $param['out_trade_no'] = $payNumber;
-        $param['out_refund_no'] = $refundNumber;
+        $param['transaction_id'] = $transactionNumber;
+        $param['out_trade_no'] = $tradeNo;
+        $param['out_refund_no'] = $refundNo;
         if (!empty($reason)) {
             $param['reason'] = $reason;
         }
@@ -235,7 +235,7 @@ class WeChat
     {
         try {
             $data = WeChat::getNotifyData('TRANSACTION.SUCCESS');
-            $trade_no = $data['out_trade_no'];
+            $tradeNo = $data['out_trade_no'];
             $transactionNumber = $data['transaction_id'];
             if (empty($payNumber)) {
                 return;
@@ -244,7 +244,7 @@ class WeChat
             $paidAmount = floatval(intval($amount['payer_total']) / 100);
             $callback = Config::get('wechat.notify_callback');
             if (is_callable($callback)) {
-                call_user_func($callback, $trade_no, $paidAmount, $transactionNumber);
+                call_user_func($callback, $tradeNo, $paidAmount, $transactionNumber);
             }
             header('HTTP/1.1 200 OK');
             exit;
@@ -267,7 +267,7 @@ class WeChat
     {
         try {
             $data = WeChat::getNotifyData('REFUND.SUCCESS');
-            $refund_no = $data['out_refund_no'];
+            $refundNo = $data['out_refund_no'];
             $refundNumber = $data['refund_id'];
             if (empty($refundNumber)) {
                 return;
@@ -276,7 +276,7 @@ class WeChat
             $refundAmount = floatval(intval($amount['payer_refund']) / 100);
             $callback = Config::get('wechat.refund_callback');
             if (is_callable($callback)) {
-                call_user_func($callback, $refund_no, $refundAmount, $refundNumber);
+                call_user_func($callback, $refundNo, $refundAmount, $refundNumber);
             }
             header('HTTP/1.1 200 OK');
             exit;
@@ -293,18 +293,18 @@ class WeChat
 
     /**
      * 关闭订单
-     * @param string $payNumber
+     * @param string $tradeNo
      * @return mixed|null
      * @throws BusException
      * @throws GuzzleException
      */
-    public static function close(string $payNumber): mixed
+    public static function close(string $tradeNo): mixed
     {
         //微信v3
         $weChat = Config::get('wechat.*');
         $param = [];
         $param['mchid'] = $weChat['pay_mchid'];
-        return self::postData('https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/' . $payNumber . '/close', $param);
+        return self::postData('https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/' . $tradeNo . '/close', $param);
     }
 
     /**
